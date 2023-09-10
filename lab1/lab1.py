@@ -1,82 +1,47 @@
-import numpy as np
+import numpy as np # работа с числами
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from scipy.integrate import odeint
+import sympy as sp # библиотека работы с символами (формулы)
 
-def Rot2D(X,Y,Alpha):
-    RotX = X*np.cos(Alpha) - Y*np.sin(Alpha)
-    RotY = X*np.sin(Alpha) + Y*np.cos(Alpha)
-    return RotX, RotY
+t = sp.Symbol('t') # переменная t, как в математике
+r, phi = 1+sp.sin(8*t), t+0.5*sp.sin(8*t)
+x, y = r*sp.cos(phi), r*sp.sin(phi)
 
-# задаём все параметры
-P = 10       # вес колечка
-l = 0.5      # длина стержня
-c = 20       # жёсткость пружины
-g = 9.81     # скорость свободного падения
-mu = 10       # параметр мю
-l_0 = 0.25   # длина недеформированной пружины
+Vx, Vy = sp.diff(x,t), sp.diff(y,t) # Вектор скорости
+Wx, Wy = sp.diff(Vx,t), sp.diff(Vy,t) # Вектор ускорения
+v, W = sp.sqrt(Vx ** 2 + Vy ** 2), sp.sqrt(Wx ** 2 + Wy ** 2) # квадратный корень из составляющих по координатам
 
-t_fin = 20
+F_x, F_y = sp.lambdify(t,x), sp.lambdify(t,y) # функция координат
+F_Vx, F_Vy = sp.lambdify(t,Vx), sp.lambdify(t,Vy) # функция скорости
+F_Wx, F_Wy = sp.lambdify(t,Wx), sp.lambdify(t,Wy) # функция ускорения
 
-t = np.linspace(0, 10, 1001) # создаём сетку по времени
+t = np.linspace(0,10,1001) # t = массив
 
-phi = 0.2 + np.sin(4*t)
-s = 0.05 + np.cos(8*t)
+X, Y = F_x(t), F_y(t)
+Vx, Vy = F_Vx(t), F_Vy(t)
+Wx, Wy = F_Wx(t), F_Wy(t)
 
-x = l * np.sin(np.sin(phi))
-y = -l * np.cos(np.sin(phi))
+fig = plt.figure(figsize = [8,8]) # рисуем график, в скобках размеры окна
+ax = fig.add_subplot(1,1,1)
+ax.axis('equal') # чтобы единица по x была единицей по y
+ax.set(xlim=[-7,7], ylim=[-7,7])
 
-xA = l * np.sin(phi)                         # координаты конца стержня А
-yA = -l * np.cos(phi)
+ax.plot(X,Y)# траектория
+# анимация точки
+P = ax.plot(X[0],Y[0], marker='o')[0] # поставили точку
+kf = 0.3 # коэффициенты для корректного отображения
 
-xO = 0
-yO = 0
+def TheMagicOfThtMovent(i):
+   P.set_data(X[i], Y[i])
+   VLine = ax.arrow(X[i], Y[i], kf * Vx[i], kf * Vy[i], width=0.03, color="red")  # Вектор скорости
+   WLine = ax.arrow(X[i], Y[i], kf*0.01 * Wx[i], kf * Vy[i], width=0.03, color="green")  # Вектор ускорения
 
-xM = (l_0 + s/5) * np.sin(phi)               # координаты колечка М
-yM = - (l_0 + s/5) * np.cos(phi)
+   CVector = ax.arrow(X[i], Y[i], - kf * ((Vy[i] * (Vx[i] ** 2 + Vy[i] ** 2)) / (Vx[i] * Wy[i] - Wx[i] * Vy[i])),
+                      kf * ((Vx[i] * (Vx[i] ** 2 + Vy[i] ** 2)) / (Vx[i] * Wy[i] - Wx[i] * Vy[i])),
+                      width=0.03, color="black")  # Вектор кривизны
 
-xT = np.array([-0.09/2, 0, 0.09/2, -0.09/2]) # опора O
-yT = np.array([0.05, 0, 0.05, 0.05])
+   return P, VLine, WLine, CVector
 
-n = 13
-h = 0.03
-xG = np.linspace(0,1,2*n+1)
-yG = np.zeros(2*n+1)
-ss = 0
-for i in range(2*n+1):
-    yG[i] = h*np.sin(ss)
-    ss += np.pi/2
-
-L_Spr = l_0+s/5
-
-RotX_Spr, RotY_Spr = Rot2D(xG*L_Spr[0], yG, phi[0] - np.pi/2)
-
-
-
-fig = plt.figure(figsize=[13, 9])
-ax = fig.add_subplot(1, 1, 1)
-ax.axis('equal')
-ax.set(xlim=[-1, 1], ylim=[-1, 1])
-
-AO = ax.plot([xA[0], xO], [yA[0], yO], color=[0, 0, 0])[0]                  # стержень
-A = ax.plot(xA[0], yA[0], 'o', color=[0, 0, 0])[0]                          # конец стержня
-O = ax.plot(xO, yO, 'o', color=[0, 0, 0])[0]                                # точка О
-T = ax.plot(xT,yT, color=[0, 0, 0])[0]                                      # опора О
-M = ax.plot(xM[0], yM[0], 'o', color=[0, 0, 1])[0]                          # колечко М
-Spring = ax.plot(RotX_Spr, RotY_Spr, color=[0, 0, 1])[0]             # пружина 
-
-
-def kadr(i):
-    A.set_data(xA[i], yA[i])
-    O.set_data(xO, yO)
-    AO.set_data([xA[i], xO], [yA[i], yO])
-    M.set_data(xM[i], yM[i])
-    RotX_Spr, RotY_Spr = Rot2D(xG*L_Spr[i], yG, phi[i] - np.pi/2)
-    Spring.set_data(RotX_Spr, RotY_Spr)
-    return [A, O, AO, M, Spring]
-
-
-
-kino = FuncAnimation(fig, kadr,frames=len(t),interval=10)
+kino = FuncAnimation(fig,TheMagicOfThtMovent, frames = len(t), interval = 20,blit = True)
 
 plt.show()
